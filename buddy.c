@@ -51,7 +51,9 @@
 typedef struct {
 	struct list_head list;
 	/* TODO: DECLARE NECESSARY MEMBER VARIABLES */
-	int order;
+	int order; //alloc step 1
+	int pageIndex; //split step 2
+	char* buddy_address;
 } page_t;
 
 /**************************************************************************
@@ -82,8 +84,9 @@ void buddy_init()
 	int i;
 	int n_pages = (1<<MAX_ORDER) / PAGE_SIZE;
 	for (i = 0; i < n_pages; i++) {
-	INIT_LIST_HEAD(&g_pages[i].list);
+		INIT_LIST_HEAD(&g_pages[i].list);
 		/* TODO: INITIALIZE PAGE STRUCTURES */
+		g_pages[i]
 	}
 
 	/* initialize freelist */
@@ -164,18 +167,19 @@ void buddy_dump()
 }
 void split (int order)
 {
-	/*1. Get the page structure from the free-list node */
- 	page_t *page_Structure = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), (order - 1)))];
-	/*2. Get the index of the page structure obtained above (Hint: index_from_page) */
-	/*3. Now you want to split this page-block of given order into two equally sized blocks 
-	     of order -1. Note that the address of the first of these child blocks will be the same as the parent block.
-	     You only need to calculate the address of the buddy */
 
+	//1
+ 	page_t *page_Structure = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), (order - 1)))];
+	//2
+	//3
+	//4
+	//5
+	//6
 }
 /*split (order):
-
-
-	
+	1. Get the page structure from the free-list node (Hint: Recall the method to get the payload pointer from the list pointer which can come in handy here. Remember that the free-list[order] node is embedded inside the page-structure as list. You may want to use the page_from_head macro here)
+	2. Get the index of the page structure obtained above (Hint: index_from_page)
+	3. Now you want to split this page-block of given order into two equally sized blocks of order - 1. Note that the address of the first of these child blocks will be the same as the parent block. You only need to calculate the address of the buddy
 	4. Calculate the address of the buddy from the address of the page you have. Hint: Lets say that the page you have; has index i. 
 		a. Calculate the absolute address of the page using its index and order (page_to_addr might be useful here
 		b. Calculate the address of the buddy using the address calculated above (buddy_addr is useful here)
