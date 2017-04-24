@@ -86,7 +86,7 @@ void buddy_init()
 	for (i = 0; i < n_pages; i++) {
 		INIT_LIST_HEAD(&g_pages[i].list);
 		/* TODO: INITIALIZE PAGE STRUCTURES */
-		g_pages[i]
+		g_pages[i].pageIndex = i;
 	}
 
 	/* initialize freelist */
