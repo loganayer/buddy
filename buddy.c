@@ -53,7 +53,7 @@ typedef struct {
 	/* TODO: DECLARE NECESSARY MEMBER VARIABLES */
 	int order; //alloc step 1
 	int pageIndex; //split step 2
-	char* buddy_address;
+	char* buddy_address; //split step 4
 } page_t;
 
 /**************************************************************************
@@ -87,6 +87,7 @@ void buddy_init()
 		INIT_LIST_HEAD(&g_pages[i].list);
 		/* TODO: INITIALIZE PAGE STRUCTURES */
 		g_pages[i].pageIndex = i;
+		g_pages[i].buddy_address = PAGE_TO_ADDR(i);
 	}
 
 	/* initialize freelist */
