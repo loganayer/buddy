@@ -51,9 +51,7 @@
 typedef struct {
 	struct list_head list;
 	/* TODO: DECLARE NECESSARY MEMBER VARIABLES */
-	char* blockAddress;
-	int temp; //current page
-	int blockIndex;
+	int order;
 } page_t;
 
 /**************************************************************************
@@ -83,13 +81,9 @@ void buddy_init()
 {
 	int i;
 	int n_pages = (1<<MAX_ORDER) / PAGE_SIZE;
-
 	for (i = 0; i < n_pages; i++) {
+	INIT_LIST_HEAD(&g_pages[i].list);
 		/* TODO: INITIALIZE PAGE STRUCTURES */
-		INIT_LIST_HEAD(&g_pages[i].list);
-        	g_pages[i].temp = i; //page #
-		g_pages[i].blockIndex = -1; //frees block
-        	g_pages[i].blockAddress = PAGE_TO_ADDR(i); //assigns address of page to an blockadress
 	}
 
 	/* initialize freelist */
@@ -117,11 +111,17 @@ void buddy_init()
  */
 void *buddy_alloc(int size)
 {
-	/* TODO: IMPLEMENT THIS FUNCTION */
-	if(size <= 0)
-	{
+	/* TODO: IMPLEMENT THIS FUNCTION 
+	1. Ascertain the free-block order which can satisfy the requested size. The block order for size x is ceil ( log2 (x))
+	Example: 60k -> block-order = ceil ( log2 (60k)) = ceil ( log2 (k x 2^5 x 2^10)) = order-16
+	2. Iterate over the free-lists; starting from the order calculated in the above step. If the free-list at the 
+	required order is not-empty, just remove the first page from that list and return it to caller to satisfy the request
+	3. If the free-list at the required order is empty, find the first non-empty free-list with order > required-order. Lets say that such a list exists at order-k
+	4. Remove a page from the order-k list and repeatedly break the page and populate the respective free-lists until 
+	the page of required-order is obtained. Return that page to caller (It would be good to encase this functionality in a separate function e.g. split)
+	5. If a non-empty free-list is not found, this is an error
+	*/
 	return NULL;
-	}
 }
 
 /**
@@ -135,11 +135,13 @@ void *buddy_alloc(int size)
  */
 void buddy_free(void *addr)
 {
-	/* TODO: IMPLEMENT THIS FUNCTION */
-	//int temp = ADDR_TO_PAGE ( blockAddress );
-	//int isBuddyFree = true;
-	/*while(isBuddyFree &  // while buddy & block is free, combine both into a bigger block
-	isBuddyFree = false;*/
+	/* TODO: IMPLEMENT THIS FUNCTION 
+	1. Calculate the address of the buddy
+	2. If the buddy is free, merge the two blocks i.e. remove the buddy from its free-list, update the order of the page-at-hand and add the page to the relevant free-list
+	3. Do step-2 repeatedly until no merging is possible
+		a. The buddy is not free
+		b. The max order is reached
+	*/
 }
 
 /**
@@ -160,3 +162,28 @@ void buddy_dump()
 	}
 	printf("\n");
 }
+void split (int order)
+{
+	/*1. Get the page structure from the free-list node */
+ 	page_t *page_Structure = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), (order - 1)))];
+	/*2. Get the index of the page structure obtained above (Hint: index_from_page) */
+	/*3. Now you want to split this page-block of given order into two equally sized blocks 
+	     of order -1. Note that the address of the first of these child blocks will be the same as the parent block.
+	     You only need to calculate the address of the buddy */
+
+}
+/*split (order):
+
+
+	
+	4. Calculate the address of the buddy from the address of the page you have. Hint: Lets say that the page you have; has index i. 
+		a. Calculate the absolute address of the page using its index and order (page_to_addr might be useful here
+		b. Calculate the address of the buddy using the address calculated above (buddy_addr is useful here)
+		c. Convert the address of buddy into page-index (addr_to_page)
+	5. Populate the fields of both pages appropriately (depending upon what you are keeping in your page-structure. I would suggest that you keep at-least the order of the page in the page-structure)
+	6. Add both pages to the free-lists at order - 1 (Note: The buddy page can simply be added to the list. The original page will have to be removed from its current list and moved to the list at order - 1. list_move macro may come in handy for this)
+*/
+
+/*merge 
+	method is quite similar to split. If you can correctly implement split, you should not have any problem implementing merge.
+*/
