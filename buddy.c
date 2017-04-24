@@ -33,12 +33,12 @@
 
 /* find buddy address */
 #define BUDDY_ADDR(addr, o) (void *)((((unsigned long)addr - (unsigned long)g_memory) ^ (1<<o)) \
-		+ (unsigned long)g_memory)
+									 + (unsigned long)g_memory)
 
 #if USE_DEBUG == 1
 #  define PDEBUG(fmt, ...) \
 	fprintf(stderr, "%s(), %s:%d: " fmt,			\
-			__func__, __FILE__, __LINE__, ##__VA_ARGS__)
+		__func__, __FILE__, __LINE__, ##__VA_ARGS__)
 #  define IFDEBUG(x) x
 #else
 #  define PDEBUG(fmt, ...)
@@ -50,11 +50,11 @@
  **************************************************************************/
 typedef struct {
 	struct list_head list;
+	
 	/* TODO: DECLARE NECESSARY MEMBER VARIABLES */
-	int order; //alloc step 1
-	int pageIndex; //split step 2
-	char* buddy_address; //split step 4
-	int isFree;
+	int order; 					//order of page
+	int index; 					//index of page
+	char* address;				//address of page
 } page_t;
 
 /**************************************************************************
@@ -84,13 +84,18 @@ void buddy_init()
 {
 	int i;
 	int n_pages = (1<<MAX_ORDER) / PAGE_SIZE;
+	
 	for (i = 0; i < n_pages; i++) {
 		INIT_LIST_HEAD(&g_pages[i].list);
+		
 		/* TODO: INITIALIZE PAGE STRUCTURES */
-		g_pages[i].pageIndex = i;
-		g_pages[i].buddy_address = PAGE_TO_ADDR(i);
-		g_pages[i].isFree = 0; //0 means free, 1 means not free
+		g_pages[i].index = i;
+		g_pages[i].address = PAGE_TO_ADDR(i);
+		g_pages[i].order = -1;
 	}
+	
+	//initial chunk of max order
+	g_pages[0].order = MAX_ORDER;
 
 	/* initialize freelist */
 	for (i = MIN_ORDER; i <= MAX_ORDER; i++) {
@@ -107,7 +112,7 @@ void buddy_init()
  * On a memory request, the allocator returns the head of a free-list of the
  * matching size (i.e., smallest block that satisfies the request). If the
  * free-list of the matching block size is empty, then a larger block size will
- {
+{
  * further splitted while the right block will be added to the appropriate
  * free-list.
  *
@@ -117,20 +122,120 @@ void buddy_init()
 
 void *buddy_alloc(int size)
 {
-	int order;
-	order = ceil(log2(size));
+	int reqOrder;				//required order for input size
+	page_t* temp;				//page to hold our allocation
+	
+	/*
+	1. Ascertain the free-block order which can satisfy the requested size. The block order for size x is ceil ( log2 (x))
+	Example: 60k -> block-order = ceil ( log2 (60k)) = ceil ( log2 (k x 2^5 x 2^10)) = order-16
+	*/
+	reqOrder = ceil(log2(size));
+	
+	/*
+	2. Iterate over the free-lists; starting from the order calculated in the above step. If the free-list at the
+	required order is not-empty, just remove the first page from that list and return it to caller to satisfy the request
+	*/
+	/*
+	3. 	If the free-list at the required order is empty, find the first non-empty free-list with order > required-order. 
+	Lets say that such a list exists at order-k
+	*/
+	for (int i = reqOrder; i <= MAX_ORDER; i++)
+	{
+		//Find first available free-list with
+		//order >= reqOrder
+		if (!list_empty(&free_area[i]))
+		{
+			//order = reqOrder
+			if (i == reqOrder)
+			{
+				//just remove the first page from that list and return it to caller to satisfy the request
+				//grab for return
+				temp = list_entry(free_area[i].next, page_t, list);
+				
+				//remove first page
+				list_del(&(temp->list));
+			}
+			//order > reqOrder
+			else
+			{
+				/*
+				4. Remove a page from the order-k list and repeatedly break the page and populate the respective free-lists until
+				the page of required-order is obtained. Return that page to caller (It would be good to encase this functionality in a separate function e.g. split)
+				*/
+				//call split to get the page
+				temp = split(i, reqOrder);
+			}
+			
+			//update the order
+			temp->order = reqOrder;
 
-	/* TODO: IMPLEMENT THIS FUNCTION
-	   1. Ascertain the free-block order which can satisfy the requested size. The block order for size x is ceil ( log2 (x))
-Example: 60k -> block-order = ceil ( log2 (60k)) = ceil ( log2 (k x 2^5 x 2^10)) = order-16
-2. Iterate over the free-lists; starting from the order calculated in the above step. If the free-list at the
-required order is not-empty, just remove the first page from that list and return it to caller to satisfy the request
-3. If the free-list at the required order is empty, find the first non-empty free-list with order > required-order. Lets say that such a list exists at order-k
-4. Remove a page from the order-k list and repeatedly break the page and populate the respective free-lists until
-the page of required-order is obtained. Return that page to caller (It would be good to encase this functionality in a separate function e.g. split)
-5. If a non-empty free-list is not found, this is an error
-	 */
+			//return address
+			return PAGE_TO_ADDR(temp->index);
+		}
+	}
+
+	/*
+	5. If a non-empty free-list is not found, this is an error
+	*/
 	return NULL;
+}
+
+//split blocks until we have a free block of reqOrder
+void* split(int order, int reqOrder)
+{
+	/*
+	1. Get the page structure from the free-list node (Hint: Recall the method to get the payload pointer from the list 
+	pointer which can come in handy here. Remember that the free-list[order] node is embedded inside the page-structure as list. 
+	You may want to use the page_from_head macro here)
+	*/
+	page_t*	left = list_entry(free_area[order].next, page_t, list);
+				
+	//remove first page
+	list_del(&(left->list));
+	/*
+	2. Get the index of the page structure obtained above (Hint: index_from_page)
+	*/
+	int index = left->index;
+	
+	/*
+	3. Now you want to split this page-block of given order into two equally sized blocks of order - 1. Note that the address 
+	of the first of these child blocks will be the same as the parent block. You only need to calculate the address of the buddy
+	*/
+	int nextOrder = order - 1;
+	
+	/*
+	4. Calculate the address of the buddy from the address of the page you have. Hint: Lets say that the page you have; has index i.
+		a. Calculate the absolute address of the page using its index and order (page_to_addr might be useful here
+		b. Calculate the address of the buddy using the address calculated above (buddy_addr is useful here)
+		c. Convert the address of buddy into page-index (addr_to_page)
+	*/
+	page_t* right = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), order))];
+
+	/*
+	5. Populate the fields of both pages appropriately (depending upon what you are keeping in your page-structure. I would 
+	suggest that you keep at-least the order of the page in the page-structure)
+	*/
+	left->order = nextOrder;
+	right->order = nextOrder;
+	
+	/*
+	6. Add both pages to the free-lists at order - 1 (Note: The buddy page can simply be added to the list. The original page 
+	will have to be removed from its current list and moved to the list at order - 1. list_move macro may come in handy for this)
+	*/
+	list_add(&(right->list), &free_area[nextOrder]);
+	
+	//determine if we should just return left
+	if (nextOrder == reqOrder)
+	{
+		//simply return the left as we now have the proper size
+		return PAGE_TO_ADDR(left->index);
+	}
+
+	//add left to list also
+	list_add(&(left->list), &free_area[nextOrder]);
+	
+	//and recurse
+	return split(nextOrder, reqOrder);
 }
 
 /**
@@ -144,7 +249,6 @@ the page of required-order is obtained. Return that page to caller (It would be 
  */
 void buddy_free(void *addr)
 {
-	
 	int Buddyaddress = BUDDY_ADDR(addr,19);
 	for(int i = 0; i <= 20; i++)
 	{
@@ -184,29 +288,3 @@ void buddy_dump()
 	}
 	printf("\n");
 }
-void split (int order)
-{
-
-	//1
-	//page_t *page_Structure = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), (order - 1)))];
-	//2
-	//3
-	//4
-	//5
-	//6
-}
-/*split (order):
-  1. Get the page structure from the free-list node (Hint: Recall the method to get the payload pointer from the list pointer which can come in handy here. Remember that the free-list[order] node is embedded inside the page-structure as list. You may want to use the page_from_head macro here)
-  2. Get the index of the page structure obtained above (Hint: index_from_page)
-  3. Now you want to split this page-block of given order into two equally sized blocks of order - 1. Note that the address of the first of these child blocks will be the same as the parent block. You only need to calculate the address of the buddy
-  4. Calculate the address of the buddy from the address of the page you have. Hint: Lets say that the page you have; has index i.
-  a. Calculate the absolute address of the page using its index and order (page_to_addr might be useful here
-  b. Calculate the address of the buddy using the address calculated above (buddy_addr is useful here)
-  c. Convert the address of buddy into page-index (addr_to_page)
-  5. Populate the fields of both pages appropriately (depending upon what you are keeping in your page-structure. I would suggest that you keep at-least the order of the page in the page-structure)
-  6. Add both pages to the free-lists at order - 1 (Note: The buddy page can simply be added to the list. The original page will have to be removed from its current list and moved to the list at order - 1. list_move macro may come in handy for this)
- */
-
-/*merge
-  method is quite similar to split. If you can correctly implement split, you should not have any problem implementing merge.
- */
