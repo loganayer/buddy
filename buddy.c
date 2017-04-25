@@ -51,7 +51,7 @@
 typedef struct {
 	struct list_head list;
 	
-	/* TODO: DECLARE NECESSARY MEMBER VARIABLES */
+	/* DECLARE NECESSARY MEMBER VARIABLES */
 	int order; 					//order of page
 	int index; 					//index of page
 	char* address;				//address of page
@@ -88,7 +88,7 @@ void buddy_init()
 	for (i = 0; i < n_pages; i++) {
 		INIT_LIST_HEAD(&g_pages[i].list);
 		
-		/* TODO: INITIALIZE PAGE STRUCTURES */
+		/* INITIALIZE PAGE STRUCTURES */
 		g_pages[i].index = i;
 		g_pages[i].address = PAGE_TO_ADDR(i);
 		g_pages[i].order = -1;
@@ -163,7 +163,7 @@ void *buddy_alloc(int size)
 				the page of required-order is obtained. Return that page to caller (It would be good to encase this functionality in a separate function e.g. split)
 				*/
 				//call split to get the page
-				temp = split(i, reqOrder);
+				temp = (page_t*) split(i, reqOrder);
 			}
 			
 			//update the order
@@ -179,22 +179,7 @@ void *buddy_alloc(int size)
 	*/
 	return NULL;
 }
-void* merge(int order)
-{
-	//page structure
-	page_t*	left = list_entry(free_area[order].next, page_t, list);
-	//remove first page
-	list_del((&left -> list));
-	//recurse through each order and remove first page
-	if(order < MAX_ORDER)
-	{
-		merge(order+1);
-	}
-	else
-	{
-		return;
-	}
-}
+
 //split blocks until we have a free block of reqOrder
 void* split(int order, int reqOrder)
 {
@@ -224,6 +209,7 @@ void* split(int order, int reqOrder)
 		b. Calculate the address of the buddy using the address calculated above (buddy_addr is useful here)
 		c. Convert the address of buddy into page-index (addr_to_page)
 	*/
+	//							c.			b.			a.
 	page_t* right = &g_pages[ADDR_TO_PAGE(BUDDY_ADDR(PAGE_TO_ADDR(index), order))];
 
 	/*
@@ -263,26 +249,82 @@ void* split(int order, int reqOrder)
  * @param addr memory block address to be freed
  */
 void buddy_free(void *addr)
-{
-	int Buddyaddress = BUDDY_ADDR(addr,19);
-	for(int i = 0; i <= 20; i++)
+{	
+	char* buddy;						//address of buddy
+	int merge = 0;						//indicates if a merge should take place
+	page_t* page;
+	struct list_head* head;
+
+	//get index of block to free
+	int index = ADDR_TO_PAGE(addr);
+	
+	//get order of block to free
+	int order = g_pages[index].order;
+	
+	//no merges to be done
+	if (order == MAX_ORDER)
 	{
-		if(i == MAX_ORDER)
-		{
-			list_add(&g_pages[0].list, &free_area[MAX_ORDER]);
-		}
-	//	else if(isFree == '0'){
-			//merge(block address, buddy address)
-		//}
+		//simply add to the free area
+		list_add(&g_pages[index].list, &free_area[order]);
+		
+		return;
 	}
-	//if(isFree)
-	/* TODO: IMPLEMENT THIS FUNCTION
-	   1. Calculate the address of the buddy
-	   2. If the buddy is free, merge the two blocks i.e. remove the buddy from its free-list, update the order of the page-at-hand and add the page to the relevant free-list
-	   3. Do step-2 repeatedly until no merging is possible
-	   a. The buddy is not free
-	   b. The max order is reached
-	 */
+
+	/*
+	1. Calculate the address of the buddy
+	*/
+	buddy = (char*) BUDDY_ADDR(index, order);
+	
+	/*
+	2. If the buddy is free, merge the two blocks i.e. remove the buddy from its free-list, 
+	update the order of the page-at-hand and add the page to the relevant free-list
+	*/
+	//look for potential buddy in free list
+	list_for_each(head, &free_area[order])
+	{
+		//assess current page
+		page = list_entry(head, page_t, list);
+		
+		if (page->address == buddy)
+		{
+			//buddy found, we can break the loop
+			merge = 1;
+			break;
+		}
+	}
+	
+	//determine if we should merge or just add to the free list
+	if (merge == 1)
+	{
+		// use the lesser of the two addresses
+		if ((char*) addr > page->address) 
+		{
+			addr = page->address;
+			index = ADDR_TO_PAGE(addr);
+		}
+		
+		//remove from free area
+		list_del(&(page->list));
+		
+		//update order
+		g_pages[index].order ++;
+		
+		//add to the free area
+		list_add(&g_pages[index].list, &free_area[order + 1]);
+		
+		/*
+		3. Do step-2 repeatedly until no merging is possible
+		a. The buddy is not free
+		b. The max order is reached
+		*/
+		buddy_free(PAGE_TO_ADDR(index));
+	}
+	//buddy wasn't free so we can't merge
+	else
+	{
+		//simply add to the free area
+		list_add(&g_pages[index].list, &free_area[order]);
+	}
 }
 
 /**
