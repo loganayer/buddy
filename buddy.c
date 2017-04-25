@@ -179,7 +179,22 @@ void *buddy_alloc(int size)
 	*/
 	return NULL;
 }
-
+void* merge(int order)
+{
+	//page structure
+	page_t*	left = list_entry(free_area[order].next, page_t, list);
+	//remove first page
+	list_del((&left -> list));
+	//recurse through each order and remove first page
+	if(order < MAX_ORDER)
+	{
+		merge(order+1);
+	}
+	else
+	{
+		return;
+	}
+}
 //split blocks until we have a free block of reqOrder
 void* split(int order, int reqOrder)
 {
