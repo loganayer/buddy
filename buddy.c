@@ -284,7 +284,18 @@ void buddy_free(void *addr)
 	{
 		//assess current page
 		page = list_entry(head, page_t, list);
-		
+		/* various memory addresses
+		printf("%p \n",&g_pages[ADDR_TO_PAGE(&buddy)]);
+		printf("%p \n",page->address);
+		printf("%p \n",&(page->index));
+		printf("%p \n",&(page->address));
+		printf("%p \n",&(page->order));
+		printf("%p \n",&(page));
+		printf("%p \n",(page));
+		printf("%p, \n",buddy);
+		printf("%p, \n",&buddy);
+		printf("%p, \n",BUDDY_ADDR(index, order));
+// 		*/
 		if (page->address == buddy)
 		{
 			//buddy found, we can break the loop
